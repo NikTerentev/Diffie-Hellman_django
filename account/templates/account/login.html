@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Log-in{% endblock %}
+
+{% block content %}
+    <h1>Log-in</h1>
+    <p>Please, use the following form to log-in:</p>
+    <p>For registration, use this link: <a href="{% url 'register' %}">Registration</a>
+    </p>
+    <div class="login-form">
+        {% if messages %}
+            <ul class="messages">
+                {% for message in messages %}
+                    <li class="{{ message.tags }}">
+                        {{ message|safe }}
+                    </li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+
+        <form action="{% url 'login' %}" method="post" id="loginForm">
+            {{ form.as_p }}
+            {% csrf_token %}
+            <input type="hidden" name="text" value="{{ next }}"/>
+            <p><input type="submit" value="Log-in"></p>
+        </form>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.9-1/crypto-js.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/big-integer/1.6.52/BigInteger.min.js"
+            integrity="sha512-9Ep9DTmyYR7ilaRntBdTgdiAWg/hDjwbkgxjt04LAZdHWdo5k0eQoxmvdjz99hPSvh7R2M2LWk3DvaWer6f9mA=="
+            crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="{% static 'js/login.js' %}"></script>
+{% endblock %}

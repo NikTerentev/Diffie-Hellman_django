@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Create an account{% endblock %}
+
+{% block content %}
+    <h1>Create an account</h1>
+    <p>Please, sign up using the following form:</p>
+    <form method="post" id="registrationForm">
+        {{ user_form.as_p }}
+        {% csrf_token %}
+        <p><input type="submit" value="Create my account"></p>
+    </form>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/big-integer/1.6.52/BigInteger.min.js"
+            integrity="sha512-9Ep9DTmyYR7ilaRntBdTgdiAWg/hDjwbkgxjt04LAZdHWdo5k0eQoxmvdjz99hPSvh7R2M2LWk3DvaWer6f9mA=="
+            crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.9-1/crypto-js.min.js"></script>
+    <script src="{% static 'js/register.js' %}"></script>
+{% endblock %}

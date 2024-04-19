@@ -1,0 +1,277 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Images{% endblock %}
+
+{% block content %}
+    <style>
+        .add_image {
+            font-weight: bold;
+            background: #2b48ff;
+            color: #fff;
+            padding: 10px 15px;
+            font-size: 12px;
+            text-transform: uppercase;
+            margin-bottom: 20px;
+        }
+
+        .delete_image {
+            font-weight: bold;
+            background: #fa3030;
+            color: #fff;
+            padding: 10px 15px;
+            font-size: 12px;
+            text-transform: uppercase;
+            margin-bottom: 20px;
+            margin-top: 20px;
+        }
+    </style>
+
+    <h1>Images</h1>
+    <p>This is your images.</p>
+
+    <!-- Форма для загрузки фотографий -->
+    <form method="post" enctype="multipart/form-data" id="uploadForm">
+        {% csrf_token %}
+        <input type="file" name="photo" id="photoInput" accept="image/*"
+               required>
+        <p></p>
+        <button type="button" onclick="uploadPhoto()" class="add_image">Upload
+            Photo
+        </button>
+    </form>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/big-integer/1.6.52/BigInteger.min.js"
+            integrity="sha512-9Ep9DTmyYR7ilaRntBdTgdiAWg/hDjwbkgxjt04LAZdHWdo5k0eQoxmvdjz99hPSvh7R2M2LWk3DvaWer6f9mA=="
+            crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script>
+        class DiffieHellman {
+            constructor(keySize = 32) {
+                this.keySize = keySize;
+                this.p = bigInt.randBetween(bigInt(2).pow(this.keySize), bigInt(2).pow(this.keySize + 1));
+                this.g = bigInt.randBetween(bigInt(2), this.p.minus(bigInt.one));
+                this.privateKey = bigInt.randBetween(bigInt(2), this.p.minus(bigInt.one));
+                this.publicKey = this.g.modPow(this.privateKey, this.p);
+            }
+
+            computeSecret(partnerPublicKey) {
+                return bigInt(partnerPublicKey).modPow(this.privateKey, this.p)
+            }
+        }
+    </script>
+
+    <div id="images-container"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.9-1/crypto-js.min.js"></script>
+
+    <script>
+
+        async function uploadPhoto() {
+            const diffieHellman = new DiffieHellman();
+            const publicKeyClient = diffieHellman.publicKey.toString();
+
+            // Получение sharedSecretKey
+            const dhDataResponse = await fetch('/account/get_dh_data/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.getElementsByName('csrfmiddlewaretoken')[0].value
+                },
+                body: JSON.stringify({
+                    publicKeyClient: publicKeyClient,
+                    p: diffieHellman.p.toString(),
+                    g: diffieHellman.g.toString()
+                })
+            });
+
+            const dhData = await dhDataResponse.json();
+            var sharedSecretKey = diffieHellman.computeSecret(dhData.serverPublicKey);
+
+            // Здесь продолжается код для загрузки и отправки зашифрованного изображения
+            const fileInput = document.getElementById('photoInput');
+            const file = fileInput.files[0];
+
+            if (file) {
+                const reader = new FileReader();
+
+                reader.onload = function (e) {
+                    const imageData = e.target.result.split(',')[1]; // Получаем данные изображения в base64
+
+                    const encryptedImageData = CryptoJS.AES.encrypt(imageData, sharedSecretKey.toString());
+
+                    const formData = new FormData();
+                    formData.append('photo', file);
+                    formData.append('encryptedImageData', encryptedImageData.toString());
+
+                    // Отправка данных на сервер
+                    fetch('/account/images/', {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': document.getElementsByName('csrfmiddlewaretoken')[0].value
+                        },
+                        body: formData
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                alert('Photo uploaded successfully');
+                                location.reload();  // Перезагрузка страницы
+                            } else {
+                                console.error('Failed to upload photo:', data.message);
+                            }
+                        })
+                        .catch(error => console.error('Error:', error));
+                };
+
+                reader.readAsDataURL(file);
+            } else {
+                alert('Please choose a photo to upload.');
+            }
+        }
+
+
+    </script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const diffieHellman = new DiffieHellman();
+            const publicKeyClient = diffieHellman.publicKey.toString();
+
+            fetch('/account/get_dh_data/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.getElementsByName('csrfmiddlewaretoken')[0].value
+                },
+                body: JSON.stringify({
+                    publicKeyClient: publicKeyClient,
+                    p: diffieHellman.p.toString(),
+                    g: diffieHellman.g.toString()
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    var sharedSecretKey = diffieHellman.computeSecret(data.serverPublicKey);
+
+                    fetch('/account/images_json/', {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': document.getElementsByName('csrfmiddlewaretoken')[0].value
+                        }
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success && data.images) {
+                                data.images.forEach(image => {
+                                    // Расшифровка и отображение каждого изображения
+                                    const decryptedBytes = CryptoJS.AES.decrypt(image.image, sharedSecretKey.toString());
+                                    const decryptedImage = CryptoJS.enc.Base64.stringify(decryptedBytes);
+
+                                    const imgElement = document.createElement('img');
+                                    imgElement.src = 'data:image/jpeg;base64,' + decryptedImage;
+                                    imgElement.alt = 'Расшифрованное изображение';
+                                    imgElement.width = 200;
+
+                                    const containerDiv = document.createElement('div');
+                                    containerDiv.appendChild(imgElement);
+
+                                    const deleteForm = document.createElement('form');
+                                    deleteForm.method = 'post';
+                                    deleteForm.classList.add('delete-form');
+                                    deleteForm.setAttribute('data-url', '/account/delete_photo/' + image.id + '/');
+                                    deleteForm.addEventListener('submit', function (event) {
+                                        event.preventDefault();
+
+                                        let url = deleteForm.getAttribute('data-url');
+
+                                        fetch(url, {
+                                            method: 'POST',
+                                            headers: {
+                                                'X-CSRFToken': '{{ csrf_token }}',
+                                            },
+                                        })
+                                            .then(response => {
+                                                if (response.headers.get('content-type').includes('application/json')) {
+                                                    return response.json();
+                                                } else {
+                                                    location.reload();
+                                                    return;
+                                                }
+                                            })
+                                            .then(data => {
+                                                if (data && typeof data === 'object') {
+                                                    alert(data.message);
+                                                    location.reload();
+                                                } else {
+                                                    return;
+                                                }
+                                            })
+                                            .catch(error => console.error('Error:', error));
+                                    });
+
+                                    const csrfTokenInput = document.createElement('input');
+                                    csrfTokenInput.type = 'hidden';
+                                    csrfTokenInput.name = 'csrfmiddlewaretoken';
+                                    csrfTokenInput.value = '{{ csrf_token }}';
+
+                                    const deleteButton = document.createElement('button');
+                                    deleteButton.type = 'submit';
+                                    deleteButton.classList.add('delete_image');
+                                    deleteButton.textContent = 'Delete';
+
+                                    deleteForm.appendChild(csrfTokenInput);
+                                    deleteForm.appendChild(deleteButton);
+
+                                    containerDiv.appendChild(deleteForm);
+
+                                    document.getElementById('images-container').appendChild(containerDiv);
+                                });
+                            } else {
+                                console.error('Failed to fetch images:', data.message);
+                            }
+                        });
+                });
+        });
+
+    </script>
+
+    <script>
+        // AJAX-запрос для удаления фотографии и обновления страницы
+        document.addEventListener('DOMContentLoaded', function () {
+            let deleteForms = document.querySelectorAll('.delete-form');
+
+            deleteForms.forEach(function (form) {
+                form.addEventListener('submit', function (event) {
+                    event.preventDefault();
+
+                    let url = form.getAttribute('data-url');
+
+                    fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': '{{ csrf_token }}',
+                        },
+                    })
+                        .then(response => {
+                            if (response.headers.get('content-type').includes('application/json')) {
+                                return response.json();
+                            } else {
+                                location.reload();
+                                return;  // Добавлено здесь
+                            }
+                        })
+                        .then(data => {
+                            if (data && typeof data === 'object') {
+                                alert(data.message);  // Можно заменить на более элегантное уведомление
+                                location.reload();  // Перезагрузка страницы
+                            } else {
+                                return;
+                            }
+                        })
+                        .catch(error => console.error('Error:', error));
+                });
+            });
+        });
+    </script>
+{% endblock %}
